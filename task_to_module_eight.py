@@ -4,6 +4,20 @@ from collections import UserDict
 
 PICKLE_FILE = "addressbook.pkl"
 
+# Канонічні команди відповідно до ТЗ (GoIT):
+# hello, add, change, phone, all, add-birthday, show-birthday, birthdays, close/exit/good bye
+COMMAND_ALIASES: dict[str, set[str]] = {
+    "hello": {"hello", "привіт"},
+    "add": {"add", "додати"},
+    "change": {"change", "змінити"},
+    "phone": {"phone", "телефон"},
+    "all": {"all", "show all", "всі"},
+    "add-birthday": {"add-birthday", "додати-дн"},
+    "show-birthday": {"show-birthday", "показати-дн"},
+    "birthdays": {"birthdays", "дні-народження"},
+    "close": {"close", "exit", "good bye", "goodbye", "bye", "закрити", "вийти"},
+    "save": {"save", "зберегти"},  # додаткова команда (не обов'язкова у ТЗ)
+}
 
 def save_data(book: "AddressBook", filename: str = PICKLE_FILE) -> None:
     with open(filename, "wb") as f:
@@ -56,7 +70,7 @@ class Birthday(Field):
 class Record:
     def __init__(self, name):
         self.name = Name(name)
-        self.phones = []
+        self.phones: list[Phone] = []
         self.birthday: Birthday | None = None
 
     def add_phone(self, phone):
@@ -96,13 +110,14 @@ class AddressBook(UserDict):
                     bday_date = bday_date.replace(year=today.year + 1)
                 delta = (bday_date - today).days
                 if 0 <= delta <= 7:
+                    # якщо на вихідних — переносимо на понеділок
                     if bday_date.weekday() == 5:
                         bday_date += timedelta(days=2)
                     elif bday_date.weekday() == 6:
                         bday_date += timedelta(days=1)
                     upcoming.append({
                         "name": record.name.value,
-                        "birthday": bday_date.strftime("%d.%m.%Y")
+                        "birthday": bday_date.strftime("%d.%м.%Y")
                     })
         return upcoming
 
@@ -123,9 +138,22 @@ def input_error(func):
             return f"Помилка: {e}"
     return wrapper
 
-def parse_input(user_input):
-    parts = user_input.strip().split()
-    command = parts[0].lower() if parts else ""
+def parse_input(user_input: str):
+    """
+    Повертає (канонічна_команда, args) згідно з ТЗ.
+    Підтримує багатослівні команди типу 'show all', 'good bye' та українські синоніми.
+    """
+    text = user_input.strip().lower()
+    # спочатку намагаємося знайти збіг із відомими шаблонами (довші фрази спочатку)
+    for canonical, variants in COMMAND_ALIASES.items():
+        for v in sorted(variants, key=lambda s: -len(s)):
+            if text == v or text.startswith(v + " "):
+                rest = text[len(v):].strip()
+                args = rest.split() if rest else []
+                return canonical, args
+    # fallback: як було — перше слово як команда
+    parts = text.split()
+    command = parts[0] if parts else ""
     args = parts[1:]
     return command, args
 
@@ -196,28 +224,29 @@ def main():
     print("Вітаю у помічнику!")
     try:
         while True:
-            user_input = input("Введіть команду: ")
+            user_input = input("Введіть команду: ").strip()
             command, args = parse_input(user_input)
-            if command in ["закрити", "вийти", "close", "exit"]:
+
+            if command == "close":
                 print("До побачення!")
                 break
-            elif command in ["привіт", "hello"]:
+            elif command == "hello":
                 print("Чим можу допомогти?")
-            elif command == "додати":
+            elif command == "add":
                 print(add_contact(args, book))
-            elif command == "змінити":
+            elif command == "change":
                 print(change_contact(args, book))
-            elif command == "телефон":
+            elif command == "phone":
                 print(get_phones(args, book))
-            elif command == "всі":
+            elif command == "all":
                 print(show_all(book))
-            elif command == "додати-дн":
+            elif command == "add-birthday":
                 print(add_birthday(args, book))
-            elif command == "показати-дн":
+            elif command == "show-birthday":
                 print(show_birthday(args, book))
-            elif command == "дні-народження":
+            elif command == "birthdays":
                 print(birthdays(args, book))
-            elif command in ["зберегти", "save"]:
+            elif command == "save":
                 print(save_command(args, book))
             else:
                 print("Невідома команда.")
